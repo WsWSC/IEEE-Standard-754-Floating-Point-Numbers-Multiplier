@@ -1,82 +1,108 @@
-# IEEE Standard 754 Floating Point Numbers Multiplier
+# IEEE Standard 754 Floating Point Multiplier
 
-IEEE 754 Double Precision Floating Point Multiplier implemented in Verilog HDL.
+IEEE 754 double precision floating point multiplier implemented in Verilog HDL.
 
-This project implements a 64-bit floating point multiplier based on the IEEE 754 standard, including RTL design, synthesis, APR flow, gate-level simulation, and post-layout verification.
+This project implements a 64-bit floating point multiplier using a counter-based multi-cycle sequential architecture with shift-add mantissa multiplication.
+
+Supported flow:
+
+* RTL simulation
+* Gate-level simulation
+* Synthesis
+* APR implementation
+* Post-layout verification
+* IR drop / power rail analysis
+
 
 
 # Table of Contents
 
-- [Repository Layout](#repository-layout)
-- [Architecture](#architecture)
-- [Multi-Cycle Architecture](#multi-cycle-architecture)
-- [System Organization](#system-organization)
-- [Core Architecture](#core-architecture)
-- [Implementation Status](#implementation-status)
-- [Implemented](#implemented)
-- [Not Implemented](#not-implemented)
-- [Simulation & Verification](#simulation--verification)
-- [Test Result Summary](#test-result-summary)
-- [Detailed Log](#detailed-log)
-- [Reference](#reference)
+* [Repository Layout](#repository-layout)
+
+* [Architecture](#architecture)
+
+  * [Floating Point Multiplier Architecture](#floating-point-multiplier-architecture)
+  * [System Organization](#system-organization)
+
+* [Core Design](#core-design)
+
+  * [IEEE 754 Double Precision Format](#ieee-754-double-precision-format)
+  * [Sign Processing](#sign-processing)
+  * [Exponent Calculation](#exponent-calculation)
+  * [Mantissa Multiplication](#mantissa-multiplication)
+
+* [Verification & Result](#verification--result)
+
+  * [RTL Simulation](#rtl-simulation)
+  * [Gate-Level Simulation](#gate-level-simulation)
+  * [Timing Constraint](#timing-constraint)
+  * [Power Rail Analysis](#power-rail-analysis)
+
+* [Result Summary](#result-summary)
+
+* [Reference](#reference)
+
 
 
 # Repository Layout
 
 ```text
-├── RTL/
-├── Testbench/
-├── Netlist/
-├── Synthesis/
-├── APR/
-├── Simulation/
-└── README.md
+IEEE-754-Floating-Point-Multiplier/
+├── rtl/
+│   └── FP_MUL.v                # Floating point multiplier RTL
+│
+├── img/
+│   ├── FP_MUL_architecture.png
+│   ├── RTL_simulation.png
+│   ├── Netlist_simulation.png
+│   └── CHIP_power_analysis.png
+│
+├── README.md
+└── LICENSE
 ```
+
 
 
 # Architecture
 
 ## Floating Point Multiplier Architecture
 
-```text
-Input Buffer
-     ↓
-Sign Processing
-     ↓
-Exponent Calculation
-     ↓
-Mantissa Shift-Add Multiplication
-     ↓
-Normalization & Rounding
-     ↓
-Output Buffer
-```
+![Architecture](img/FP_MUL_architecture.png)
+
+The design adopts a counter-based multi-cycle datapath architecture.
+
+| Cycle   | Operation                           |
+| ------- | ----------------------------------- |
+| 0 – 15  | Serial input transmission           |
+| 16      | Sign & exponent processing          |
+| 17 – 42 | Mantissa shift-add multiplication   |
+| 43 – 46 | Partial sum combine & normalization |
+| 47 – 53 | Serial output transmission          |
+
+
+## System Organization
+
+Main components:
+
+* Serial input interface
+* Input buffering
+* Sign processing
+* Exponent calculation
+* Shift-add mantissa multiplication
+* Normalization
+* Serial output interface
 
 
 
-# Multi-Cycle Architecture
-
-The design adopts a counter-based multi-cycle architecture.
-
-The operation is divided into:
-
-- Input stage
-- Computation stage
-- Output stage
-
-This architecture reduces combinational delay and improves timing closure.
-
-
-
-# System Organization
+# Core Design
 
 ## IEEE 754 Double Precision Format
 
-| Field | Bits |
-|------|------|
-| Sign | 1 |
-| Exponent | 11 |
-| Fraction | 52 |
+| Field    | Bits |
+| -------- | ---- |
+| Sign     | 1    |
+| Exponent | 11   |
+| Fraction | 52   |
 
 Bias value:
 
@@ -84,177 +110,94 @@ Bias value:
 Bias = 1023
 ```
 
-Supported special cases:
+Handled cases:
 
-- Zero
-- Infinity
-- NaN
-- Normal numbers
+* Normal number
+* Zero
+* Infinity
+* NaN
 
-# Core Architecture
 
 ## Sign Processing
 
 The sign bit is generated using XOR operation.
 
 ```verilog
-sign = A.sign ^ B.sign;
+sign <= total_A[63] ^ total_B[63];
 ```
+
 
 ## Exponent Calculation
 
 Exponent calculation includes exponent addition and bias correction.
 
 ```verilog
-exp = A.exp + B.exp - Bias;
+exp <= (total_A[62:52] + total_B[62:52]) + 11'b100_0000_0010;
 ```
+
 
 ## Mantissa Multiplication
 
-The mantissa multiplication is implemented using a shift-add architecture.
+Shift-add accumulation across multiple clock cycles:
 
-Instead of using a large combinational multiplier, the multiplication is distributed across multiple clock cycles to reduce critical path delay.
+```verilog
+temp1 <= temp1 + (frac_partial_A << n);
+temp2 <= temp2 + (frac_partial_A << n);
+```
+
+The sequential implementation helps reduce combinational complexity and shorten critical path delay.
 
 Features:
 
-- Multi-cycle shift-add operation
-- Reduced hardware complexity
-- Improved synthesis timing
-- Easier timing closure
+* Multi-cycle shift-add operation
+* Reduced hardware complexity
+* Improved synthesis timing
+* Easier timing closure
 
-## Interface
 
-### Input Ports
 
-| Signal | Description |
-|------|------|
-| CLK | System clock |
-| RESET | Synchronous active-high reset |
-| ENABLE | Enable signal |
-| DATA_IN[7:0] | Serial input data |
-
-### Output Ports
-
-| Signal | Description |
-|------|------|
-| DATA_OUT[7:0] | Serial output data |
-| READY | Output valid signal |
-
-# Implementation Status
-
-# Implemented
-
-- IEEE 754 double precision multiplication
-- Sign processing
-- Exponent calculation
-- Mantissa shift-add multiplication
-- Multi-cycle architecture
-- RTL simulation
-- Gate-level simulation
-- Timing constraint setup
-- Synthesis flow
-- Low-power optimization
-- APR flow
-- Post-layout simulation
-- DRC verification
-- LVS verification
-
-# Not Implemented
-
-- Floating point addition
-- Floating point division
-- Pipelined architecture
-- Exception handling optimization
-- IEEE 754 rounding mode selection
-- Denormal number optimization
-
-# Simulation & Verification
+# Verification & Result
 
 ## RTL Simulation
 
-Functional verification includes:
+![RTL Simulation](img/RTL_simulation.png)
 
-- IEEE 754 floating point multiplication
-- Waveform verification
-- Special case handling
-- Multi-cycle operation validation
+RTL simulation passed functional verification.
+
 
 ## Gate-Level Simulation
 
-Gate-level simulation was performed after synthesis to verify:
+![Gate-Level Simulation](img/Netlist_simulation.png)
 
-- Functional correctness
-- Timing correctness
-- Netlist equivalence
+Gate-level simulation passed post-synthesis verification.
 
-## Post-Layout Simulation
-
-Post-layout simulation verified:
-
-- Functional correctness after APR
-- Timing correctness after layout
-
-# Test Result Summary
 
 ## Timing Constraint
 
-Target frequency:
-
 ```text
-2.0 GHz
+Target Clock Period : 0.4 ns
+Target Frequency    : 2.5 GHz
 ```
 
-## Low Power Optimization Comparison
+The design was synthesized using SDC timing constraints.
 
-| Configuration | Power | Area | Timing Slack |
-|------|------|------|------|
-| Without Low-Power Synthesis | 9.70237e-03 | 2854.155 | 500 ps |
-| With Low-Power Synthesis | 1.19986e-03 | 2709.780 | 490 ps |
 
-## Verification Result
+## Power Rail Analysis
 
-| Verification | Status |
-|------|------|
-| RTL Simulation | PASS |
-| Gate-Level Simulation | PASS |
-| Post-Layout Simulation | PASS |
-| DRC | PASS |
-| LVS | PASS |
+![Power Analysis](img/CHIP_power_analysis.png)
 
-# Detailed Log
+IR drop and power rail analysis were performed after APR implementation.
 
-## Synthesis
 
-Generated reports include:
 
-- Timing report
-- Area report
-- Power report
+# Result Summary
 
-## APR Flow
+| Verification            | Status  |
+| ----------------------- | ------- |
+| RTL Simulation          | PASS    |
+| Gate-Level Simulation   | PASS    |
+| Functional Verification | PASS    |
+| IR Drop Check           | PASS    |
+| DRC                     | PASS    |
+| LVS                     | MATCHED |
 
-Completed physical implementation flow:
-
-- Floorplanning
-- Placement
-- Clock Tree Synthesis (CTS)
-- Routing
-
-## Physical Verification
-
-Completed:
-
-- DRC (Design Rule Check)
-- LVS (Layout Versus Schematic)
-
-# Reference
-
-- IEEE 754 Floating Point Standard
-- Floating Point Multiplier Architecture
-- Open-source IEEE754 floating point multiplier references
-
-# Author
-
-Wu Shan-Cheng  
-National Taipei University  
-Computer Science & Information Engineering
