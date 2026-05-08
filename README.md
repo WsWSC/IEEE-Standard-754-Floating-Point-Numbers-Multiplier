@@ -1,4 +1,4 @@
-# Floating Point Number Multiplier
+# IEEE Standard 754 Floating Point Numbers Multiplier
 
 IEEE 754 Double Precision Floating Point Multiplier implemented in Verilog HDL.
 
