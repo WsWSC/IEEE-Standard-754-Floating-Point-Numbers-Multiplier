@@ -1,12 +1,16 @@
 # IEEE Standard 754 Floating Point Multiplier
 
-IEEE 754 double precision floating point multiplier implemented in Verilog HDL.
+IEEE 754 double precision floating point multiplier implemented in synthesizable
+Verilog HDL.
 
-This project implements a 64-bit floating point multiplier using a counter-based multi-cycle sequential architecture with shift-add mantissa multiplication.
+This project implements a 64-bit floating point multiplier using a
+counter-based multi-cycle sequential architecture with shift-add mantissa
+multiplication.
 
 Supported flow:
 
 * RTL simulation
+* Randomized RTL verification
 * Gate-level simulation
 * Synthesis
 * APR implementation
@@ -23,33 +27,38 @@ Supported flow:
 
   * [Floating Point Multiplier Architecture](#floating-point-multiplier-architecture)
   * [System Organization](#system-organization)
+  * [I/O Interface](#io-interface)
 
 * [Core Design](#core-design)
 
   * [IEEE 754 Double Precision Format](#ieee-754-double-precision-format)
+  * [Design Assumption](#design-assumption)
   * [Sign Processing](#sign-processing)
   * [Exponent Calculation](#exponent-calculation)
   * [Mantissa Multiplication](#mantissa-multiplication)
+  * [Output Range Handling](#output-range-handling)
 
 * [Verification & Result](#verification--result)
 
   * [RTL Simulation](#rtl-simulation)
+  * [Randomized Testbench](#randomized-testbench)
   * [Gate-Level Simulation](#gate-level-simulation)
   * [Timing Constraint](#timing-constraint)
   * [Power Rail Analysis](#power-rail-analysis)
 
 * [Result Summary](#result-summary)
 
-* [Reference](#reference)
-
 
 
 # Repository Layout
 
 ```text
-IEEE-754-Floating-Point-Multiplier/
+IEEE-754_FP_Multiplier/
 ├── rtl/
 │   └── FP_MUL.v                # Floating point multiplier RTL
+│
+├── tb/
+│   └── tb_FP_MUL.v             # RTL testbench
 │
 ├── img/
 │   ├── FP_MUL_architecture.png
@@ -62,7 +71,6 @@ IEEE-754-Floating-Point-Multiplier/
 ```
 
 
-
 # Architecture
 
 ## Floating Point Multiplier Architecture
@@ -71,13 +79,13 @@ IEEE-754-Floating-Point-Multiplier/
 
 The design adopts a counter-based multi-cycle datapath architecture.
 
-| Cycle   | Operation                           |
-| ------- | ----------------------------------- |
-| 0 – 15  | Serial input transmission           |
-| 16      | Sign & exponent processing          |
-| 17 – 42 | Mantissa shift-add multiplication   |
-| 43 – 46 | Partial sum combine & normalization |
-| 47 – 53 | Serial output transmission          |
+| Cycle | Operation |
+| --- | --- |
+| 0 - 15 | Serial input transmission |
+| 16 | Sign and exponent processing |
+| 17 - 42 | Mantissa shift-add multiplication |
+| 43 - 46 | Partial sum combine, normalization, and rounding |
+| 47 - 54 | Serial output transmission |
 
 
 ## System Organization
@@ -85,12 +93,43 @@ The design adopts a counter-based multi-cycle datapath architecture.
 Main components:
 
 * Serial input interface
-* Input buffering
+* Input byte buffering
 * Sign processing
 * Exponent calculation
 * Shift-add mantissa multiplication
-* Normalization
+* Normalization and rounding
+* Output range handling
 * Serial output interface
+
+
+## I/O Interface
+
+Top module:
+
+```verilog
+module FP_MUL(CLK, RESET, ENABLE, DATA_IN, DATA_OUT, READY);
+```
+
+| Port | Direction | Width | Description |
+| --- | --- | --- | --- |
+| `CLK` | Input | 1 | Clock signal |
+| `RESET` | Input | 1 | Active-high synchronous reset |
+| `ENABLE` | Input | 1 | Input byte valid signal |
+| `DATA_IN` | Input | 8 | Serial input byte |
+| `DATA_OUT` | Output | 8 | Serial output byte |
+| `READY` | Output | 1 | Output byte valid signal |
+
+Input data order:
+
+* Operand A is input in 8 clock cycles.
+* Operand B is input in 8 clock cycles.
+* Each operand is transmitted lower byte first.
+
+Output data order:
+
+* Result Z is output in 8 clock cycles.
+* The output result is transmitted lower byte first.
+* `READY` stays high during the 8 output cycles.
 
 
 
@@ -98,11 +137,11 @@ Main components:
 
 ## IEEE 754 Double Precision Format
 
-| Field    | Bits |
-| -------- | ---- |
-| Sign     | 1    |
-| Exponent | 11   |
-| Fraction | 52   |
+| Field | Bits |
+| --- | --- |
+| Sign | 1 |
+| Exponent | 11 |
+| Fraction | 52 |
 
 Bias value:
 
@@ -110,17 +149,26 @@ Bias value:
 Bias = 1023
 ```
 
-Handled cases:
 
-* Normal number
-* Zero
-* Infinity
-* NaN
+## Design Assumption
+
+The RTL assumes both input operands are legal finite normal double precision
+numbers.
+
+The input operands are not decoded as NaN or infinity. Under this legal-input
+assumption, the output may still become a special value when the result exponent
+is outside the normal finite range.
+
+| Output condition | Result |
+| --- | --- |
+| Normal finite result | IEEE 754 normal result |
+| Overflow | Signed infinity |
+| Underflow | Signed zero |
 
 
 ## Sign Processing
 
-The sign bit is generated using XOR operation.
+The result sign bit is generated using XOR operation.
 
 ```verilog
 sign <= total_A[63] ^ total_B[63];
@@ -135,17 +183,25 @@ Exponent calculation includes exponent addition and bias correction.
 exp <= (total_A[62:52] + total_B[62:52]) + 11'b100_0000_0010;
 ```
 
+The output range check uses an extended signed exponent path.
+
+```verilog
+exp_wide = exp_a + exp_b - 1023 + normalize_adjust;
+```
+
 
 ## Mantissa Multiplication
 
-Shift-add accumulation across multiple clock cycles:
+The mantissa multiplication is implemented with shift-add accumulation across
+multiple clock cycles.
 
 ```verilog
 temp1 <= temp1 + (frac_partial_A << n);
 temp2 <= temp2 + (frac_partial_A << n);
 ```
 
-The sequential implementation helps reduce combinational complexity and shorten critical path delay.
+The sequential implementation helps reduce combinational complexity and shorten
+critical path delay.
 
 Features:
 
@@ -155,6 +211,19 @@ Features:
 * Easier timing closure
 
 
+## Output Range Handling
+
+For legal finite normal inputs, the result exponent is checked before output.
+
+* If the final exponent is greater than or equal to 2047, the output becomes
+  signed infinity.
+* If the final exponent is less than or equal to 0, the output becomes signed
+  zero.
+* Otherwise, the normalized and rounded finite result is sent to `DATA_OUT`.
+
+The range handling logic is written in synthesizable Verilog.
+
+
 
 # Verification & Result
 
@@ -162,7 +231,47 @@ Features:
 
 ![RTL Simulation](img/RTL_simulation.png)
 
-RTL simulation passed functional verification.
+RTL simulation passed functional verification for legal finite normal inputs.
+
+
+## Randomized Testbench
+
+The randomized testbench is located in:
+
+```text
+tb/tb_FP_MUL.v
+```
+
+The testbench includes:
+
+* Directed normal-number tests
+* Legal-input output overflow tests
+* Legal-input output underflow tests
+* 100 randomized normal-number tests by default
+* `READY` pulse length checking
+* Lower-byte-first input and output checking
+
+Run RTL simulation with Icarus Verilog:
+
+```powershell
+iverilog -g2012 -Wall -o tb\tb_FP_MUL.vvp rtl\FP_MUL.v tb\tb_FP_MUL.v
+vvp tb\tb_FP_MUL.vvp
+```
+
+The random seed and random test count can be changed with plusargs.
+
+```powershell
+vvp tb\tb_FP_MUL.vvp +SEED=1234 +RANDOM_COUNT=1000
+```
+
+Latest randomized RTL result:
+
+```text
+Directed normal tests: PASS
+Output range tests with legal inputs: PASS
+Random normal tests: 100 passed, 0 failed
+Summary: 108 passed, 0 failed
+```
 
 
 ## Gate-Level Simulation
@@ -192,12 +301,14 @@ IR drop and power rail analysis were performed after APR implementation.
 
 # Result Summary
 
-| Verification            | Status  |
-| ----------------------- | ------- |
-| RTL Simulation          | PASS    |
-| Gate-Level Simulation   | PASS    |
-| Functional Verification | PASS    |
-| IR Drop Check           | PASS    |
-| DRC                     | PASS    |
-| LVS                     | MATCHED |
-
+| Verification | Status |
+| --- | --- |
+| RTL syntax check | PASS |
+| RTL directed normal tests | PASS |
+| RTL output range tests | PASS |
+| RTL randomized normal tests | PASS |
+| Gate-level simulation | PASS |
+| Functional verification | PASS |
+| IR drop check | PASS |
+| DRC | PASS |
+| LVS | MATCHED |
