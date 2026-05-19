@@ -36,7 +36,12 @@ reg [63:0] total_B;
 
 reg sign;                // Result sign
 reg [10:0] exp;          // Result exponent
+reg result_overflow;
+reg result_underflow;
 
+wire signed [12:0] exp_wide;
+wire signed [12:0] exp_a_ext;
+wire signed [12:0] exp_b_ext;
 wire [104:0] frac_partial_A;
 wire [51:0] frac_round_next;
 wire [51:0] frac_output;
@@ -117,9 +122,27 @@ always @(posedge CLK) begin
     end
 end
 
+assign exp_a_ext = {2'b00, total_A[62:52]};
+assign exp_b_ext = {2'b00, total_B[62:52]};
+assign exp_wide = exp_a_ext + exp_b_ext - 13'sd1023 +
+                  (frac[105] ? 13'sd1 : 13'sd0);
 assign frac_partial_A = {1'b1, total_A[51:0]};
 assign frac_round_next = frac[104:53] + frac[52];
 assign frac_output = (count == 31) ? frac_round_next : frac[104:53];
+
+// Output range check
+always @(posedge CLK) begin
+    if (RESET) begin
+        result_overflow <= 1'b0;
+        result_underflow <= 1'b0;
+    end else if (count == 30) begin
+        result_overflow <= (exp_wide >= 13'sd2047);
+        result_underflow <= (exp_wide <= 13'sd0);
+    end else if (count == ope_done) begin
+        result_overflow <= 1'b0;
+        result_underflow <= 1'b0;
+    end
+end
 
 // Mantissa multiplication
 always @(posedge CLK) begin
@@ -345,6 +368,20 @@ end
 always @(posedge CLK) begin
     if (RESET) begin
         DATA_OUT <= 8'b0;
+    end else if (result_overflow) begin
+        if (count >= 31 && count <= 36) begin
+            DATA_OUT <= 8'h00;
+        end else if (count == 37) begin
+            DATA_OUT <= 8'hf0;
+        end else if (count == 38) begin
+            DATA_OUT <= {sign, 7'h7f};
+        end
+    end else if (result_underflow) begin
+        if (count >= 31 && count <= 37) begin
+            DATA_OUT <= 8'h00;
+        end else if (count == 38) begin
+            DATA_OUT <= {sign, 7'h00};
+        end
     end else if (count == 31) begin
         DATA_OUT <= frac_output[7:0];
     end else if (count == 32) begin
