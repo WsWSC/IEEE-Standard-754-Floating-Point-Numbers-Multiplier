@@ -79,13 +79,36 @@ IEEE-754_FP_Multiplier/
 
 The design adopts a counter-based multi-cycle datapath architecture.
 
-| Cycle | Operation |
-| --- | --- |
-| 0 - 15 | Serial input transmission |
-| 16 | Sign and exponent processing |
-| 17 - 42 | Mantissa shift-add multiplication |
-| 43 - 46 | Partial sum combine, normalization, and rounding |
-| 47 - 54 | Serial output transmission |
+<table>
+  <tr>
+    <th align="center">Cycle</th>
+    <th align="center">Stage</th>
+    <th align="left">Description</th>
+  </tr>
+  <tr>
+    <td align="center">0 - 15</td>
+    <td align="center">Input</td>
+    <td align="left">Serial input transmission</td>
+  </tr>
+  <tr>
+    <td align="center">16</td>
+    <td align="center" rowspan="3">Operation</td>
+    <td align="left">Sign and exponent processing</td>
+  </tr>
+  <tr>
+    <td align="center">17 - 42</td>
+    <td align="left">Mantissa shift-add multiplication</td>
+  </tr>
+  <tr>
+    <td align="center">43 - 46</td>
+    <td align="left">Partial sum combine, normalization, and rounding</td>
+  </tr>
+  <tr>
+    <td align="center">47 - 54</td>
+    <td align="center">Output</td>
+    <td align="left">Serial output transmission</td>
+  </tr>
+</table>
 
 
 ## System Organization
