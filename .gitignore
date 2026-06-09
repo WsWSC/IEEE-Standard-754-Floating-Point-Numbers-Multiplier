@@ -1,0 +1,25 @@
+# Local documents and course handouts
+*.doc
+*.docx
+*.pdf
+Final Project_Floating Point Number Multiplier/
+
+# Local non-public EDA flow material extracted from course files
+apr/
+constraints/
+gate_sim/
+synthesis/
+
+# Simulation and waveform outputs
+*.vvp
+*.vcd
+*.fsdb
+*.tcf
+
+# EDA generated outputs
+*.sdf
+*.spef
+*.gds
+*.enc
+*.rpt
+report.*
