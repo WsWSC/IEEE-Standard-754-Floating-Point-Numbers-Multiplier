@@ -29,8 +29,8 @@ integer i;
 
 reg [4:0] counter;       // Input byte counter
 reg [5:0] count;         // Operation counter
-reg [7:0] A [7:0];       // Input buffer A
-reg [7:0] B [7:0];       // Input buffer B
+reg [7:0] A [7:0];       // Input buffer A      // bad design, reg [63:0] is better
+reg [7:0] B [7:0];       // Input buffer B      // bad design, reg [63:0] is better
 reg [63:0] total_A;
 reg [63:0] total_B;
 
@@ -74,10 +74,10 @@ end
 // Input byte buffer
 always @(posedge CLK) begin
     if (RESET) begin
-        for (i = 0; i < 8; i = i + 1) begin
-            A[i] <= 0;
-            B[i] <= 0;
-        end
+        for (i = 0; i < 8; i = i + 1) begin             // bad design, A <= 64'b0; B <= 64'b0; better
+            A[i] <= 0;                                  // bad design, A <= 64'b0; B <= 64'b0; better
+            B[i] <= 0;                                  // bad design, A <= 64'b0; B <= 64'b0; better
+        end                                             // bad design, A <= 64'b0; B <= 64'b0; better
     end else if (ENABLE && counter < a_input_done) begin
         A[counter] <= DATA_IN;
     end else if (ENABLE && counter >= a_input_done && counter < b_input_done) begin
